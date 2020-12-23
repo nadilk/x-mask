@@ -1,5 +1,5 @@
 {
-  "name": "@nadilk/xmask",
+  "name": "x-input-mask",
   "version": "1.0.0",
   "description": "Mask for html text input",
   "main": "index.js",
@@ -12,9 +12,15 @@
     "input"
   ],
   "author": "nadilk",
-  "license": "ISC",
-  "dependencies": {
-    "vue": "^2.6.12"
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nadilk/x-mask.git"
   },
-  "devDependencies": {}
+  "bugs": {
+    "url": "https://github.com/nadilk/x-mask/issues"
+  },
+  "homepage": "https://github.com/nadilk/x-mask#readme"
 }

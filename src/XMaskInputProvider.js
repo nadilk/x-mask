@@ -44,6 +44,7 @@ class XMaskInputProvider {
   listenInput () {
     const self = this
     this.$el.addEventListener('input', (e) => {
+      self.$el._xmask.currentEvent = e
       if (self.context.latestNewValue !== e.target._value) {
         self.context.latestNewValue = e.target._value
         if (e.inputType.includes('delete') &&
@@ -60,6 +61,7 @@ class XMaskInputProvider {
         self.$triggerInput(e.target.value)
         self.refreshElementContext()
       }
+      self.$el._xmask.currentEvent = null
     })
     this.$el.addEventListener('change', (e) => {
       if (self.context.latestNewValue !== e.target._value) {

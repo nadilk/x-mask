@@ -1,24 +1,13 @@
-import XMaskInputProvider from 'XMaskInputProvider'
-
 class XMask {
-  constructor (el, mask, config) {
+  constructor (mask, config) {
     this.setConfig(config)
     this.setMask(mask)
-    this.bindInputProvider(new XMaskInputProvider(el))
   }
 
-  refresh () {
-    const self = this
-    if (self.inputProvider) {
-      const maskData = self.processInput(self.inputProvider.getInputContext(self.inputProvider.context.oldValue), self.expandedMask)
-      self.inputProvider.syncMask(maskData)
-    }
-  }
 
   setMask (mask) {
     this.mask = mask
     this.expandedMask = this.expandMask(this.mask)
-    this.refresh()
   }
 
   setConfig (config) {
@@ -27,26 +16,9 @@ class XMask {
       { alias: '#', regex: /[0-9]{1}/ },
       { alias: 'A', regex: /[a-zA-z]{1}/ },
     ]
-    if (this.mask) {
-      this.setMask(this.mask)
-    }
   }
 
-  bindInputProvider (inputProvider) {
-    const self = this
-    this.inputProvider = inputProvider
-    self.inputProvider.$on('input', function (inputContext) {
-      console.log(inputContext)
-      if (inputContext.oldValue !== inputContext.newValue) {
-        const maskData = self.processInput(inputContext, self.expandedMask)
-        if (maskData.maskedValue !== inputContext.newValue) {
-          self.inputProvider.syncMask(maskData)
-        }
-      }
-    })
-  }
-
-  processInput ({ newValue, oldValue, selectionStart, selectionEnd, insertText }, mask) {
+  processInput ({ newValue, oldValue, selectionStart, insertText }, mask) {
     insertText = insertText || ''
     let maskIndex = 0
     let inputIndex = 0

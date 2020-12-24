@@ -1,10 +1,11 @@
 {
-  "name": "x-input-mask",
-  "version": "1.0.0",
+  "name": "@nadilk/x-input-mask",
+  "version": "1.0.5",
   "description": "Mask for html text input",
-  "main": "index.js",
+  "main": "App.vue",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vue serve test/App.vue",
+    "build": ""
   },
   "keywords": [
     "mask",
@@ -13,8 +14,13 @@
   ],
   "author": "nadilk",
   "license": "MIT",
-  "dependencies": {},
-  "devDependencies": {},
+  "dependencies": {
+    "vue": "^3.0.4"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "^3.0.4",
+    "@vue/cli": "^5.0.0-alpha.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nadilk/x-mask.git"

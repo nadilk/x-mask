@@ -1,12 +1,8 @@
 {
   "name": "@nadilk/x-input-mask",
-  "version": "1.0.10",
+  "version": "1.1.0",
   "description": "Mask for html text input",
   "main": "src/XMaskPlugin.js",
-  "scripts": {
-    "test": "vue serve test/App.vue",
-    "build": ""
-  },
   "keywords": [
     "mask",
     "html",

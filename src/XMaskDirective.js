@@ -10,21 +10,24 @@ const findInputDeep = (el) => {
     return null
 }
 
-function registerInputListener(el){
+function registerInputListener(el, binding){
     el._xmask_.el.addEventListener('input',function (e){
-        el._xmask_.inputState.insertText = el._xmask_.inputState.insertText || e.data
-        el._xmask_.inputState.oldValue = el._xmask_.inputState.newValue
-        el._xmask_.inputState.newValue = e.target.value
-        adjustCaret(el,e)
-        const maskResult = el._xmask_.processor.processInput(el._xmask_.inputState)
-        el._xmask_.inputState.insertText = ''
-        el._xmask_.value = maskResult.maskedValue
-        el._xmask_.el.selectionStart = el._xmask_.el.selectionEnd = maskResult.caretPosition
-        updateInputState(el._xmask_.el,true,maskResult.maskedValue)
+        el._xmask_.lastTrigger = el._xmask_.lastTrigger || 'input'
+        if(el._xmask_.inputState.oldValue !== el._xmask_.el.value){
+            applyMask(e,el, binding)
+        }else{
+            el._xmask_.lastTrigger = null
+        }
+
+    })
+
+    el._xmask_.el.addEventListener('keypress',function (e){
+        el._xmask_.lastTrigger = 'keypress'
+        return true
     })
 
     el._xmask_.el.addEventListener('paste', (e) => {
-        el._xmask_.inputState.insertText = e.clipboardData.getData('Text')
+        el._xmask_.inputState.pasteText = e.clipboardData.getData('Text')
     })
 
     document.addEventListener('selectionchange',function (){
@@ -32,9 +35,39 @@ function registerInputListener(el){
     })
 }
 
-function attachXmask(el, mask){
+function applyMask(e,el,binding){
+    if(e.data && e.data === '@@@@@@@@@@@@')
+        return
+    el._xmask_.inputState.insertText = el._xmask_.inputState.insertText || e.data
+    el._xmask_.inputState.oldValue = el._xmask_.inputState.newValue
+    el._xmask_.inputState.newValue = el._xmask_.el.value
+    if(el._xmask_.inputState.oldValue !== el._xmask_.inputState.newValue) {
+        adjustCaret(el, e)
+        const maskResult = el._xmask_.processor.processInput(el._xmask_.inputState)
+        console.log('MASK: "'+binding.value+'" | "'+el._xmask_.inputState.oldValue+'" -> "'+el._xmask_.inputState.newValue+ '" = "' +maskResult.maskedValue + '"')
+        el._xmask_.inputState.insertText = ''
+        if (maskResult.errors.length > 0) {
+            if (!el._xmask_.isComponent) {
+                el.dispatchEvent(new CustomEvent('error', {detail: maskResult.errors[0]}))
+            } else {
+                el.__vueParentComponent.proxy.$emit('error', {detail: maskResult.errors[0]})
+            }
+        }
+
+        updateInputState(el._xmask_.el,true,maskResult.maskedValue)
+            el._xmask_.el.selectionStart = el._xmask_.el.selectionEnd = maskResult.caretPosition
+            console.log(maskResult.caretPosition);
+
+
+        el._xmask_.lastTrigger = null
+    }
+
+
+}
+
+function attachXmask(el, mask, binding){
     el._xmask_ = {
-        processor:new XMask(mask),
+        processor:null,
         el:findInputDeep(el),
         inputState:{
             oldValue:null,
@@ -42,19 +75,28 @@ function attachXmask(el, mask){
             insertText:'',
             selectionStart:0,
             selectionEnd:0
-        }
+        },
+        isComponent: false,
+        applyMask(){ applyMask(new InputEvent('input'),el,binding); }
     }
-    updateInputState(el)
+    el._xmask_.el._xmask_ = el._xmask_
 }
 
 function updateInputState(el, updateValue, newValue){
-    updateValue = updateValue||true
+    updateValue = updateValue !== undefined ? updateValue : true
     if(updateValue) {
         el._xmask_.inputState.oldValue = el._xmask_.inputState.newValue
-        el._xmask_.inputState.newValue = newValue || el._xmask_.el.value
+        el._xmask_.inputState.newValue = newValue
+        if (newValue != el._xmask_.el.value && !el._xmask_.isComponent) {
+            el._xmask_.el.value = newValue
+            el._xmask_.el.dispatchEvent(new InputEvent('input'))
+        } else if( (newValue != el._xmask_.el.value ||  newValue != el._xmask_.el._value) && el._xmask_.isComponent){
+            el.__vueParentComponent.proxy.$emit('update:modelValue', newValue)
+            el._xmask_.el.value = newValue
+        }
     }
     el._xmask_.inputState.selectionStart = el._xmask_.el.selectionStart
-    el._xmask_.inputState.selectionStart = el._xmask_.el.selectionEnd
+    el._xmask_.inputState.selectionEnd = el._xmask_.el.selectionEnd
 }
 
 function adjustCaret(el, inputEvent){
@@ -67,23 +109,33 @@ function adjustCaret(el, inputEvent){
             inputState.selectionEnd++
         }
     }
-    if (inputEvent.inputType !== 'insertFromPaste') {
-        inputState.insertText = inputEvent.data
-    }
+    inputState.insertText = inputState.pasteText || inputEvent.data
+    inputState.pasteText = null
 }
 
 const XMaskDirective = {
-    created(el){
-        registerInputListener(el)
+    created(el,binding){
+        attachXmask(el,null,binding)
+        registerInputListener(el,binding)
     },
 
     mounted(el,binding){
         const mask = binding.value
-        attachXmask(el,mask)
+        el._xmask_.processor = new XMask(mask, binding.instance.__xmask.config)
+        el._xmask_.isComponent = el.__vnode.type !== 'input'
+        el._xmask_.inputState.oldValue = el._xmask_.inputState.newValue = ''
+        el._xmask_.inputState.selectionStart = el._xmask_.inputState.selectionStart = 0
+        binding.instance.$nextTick(()=>{
+            console.log(el._xmask_)
+            el._xmask_.applyMask()
+        })
+
     },
-
-    updated() {
-
+    updated(el, binding, b,c) {
+        if(!el._xmask_.lastTrigger){
+            el._xmask_.applyMask()
+        }
+        el._xmask_.lastTrigger = null
     }
 }
  export default XMaskDirective

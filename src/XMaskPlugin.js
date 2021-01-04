@@ -1,6 +1,6 @@
 import defaultConfig from "./resources/defaultConfig";
 import XMaskDirective from "./XMaskDirective";
-import XMaskService from "@nadilk/x-input-mask/src/core/XMaskService";
+import XMaskService from "./core/XMaskService";
 
 function tryGetConfig(config,param){
     if(config && config[param])

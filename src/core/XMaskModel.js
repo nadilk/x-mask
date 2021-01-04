@@ -1,5 +1,5 @@
 import XMaskValidator from "./XMaskValidator";
-import defaultConfig from "@nadilk/x-input-mask/src/resources/defaultConfig";
+import defaultConfig from "../resources/defaultConfig";
 
 // Класс который реализует функционал хранения текущего состояния поля ввода и маски,
 // но с целью универсальности не имеет привязки к элементам ввода HTML, событиям, все хранится в объектах

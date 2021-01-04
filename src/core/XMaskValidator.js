@@ -36,10 +36,9 @@ class XMaskValidator {
     }
 
     static regex({value, error}) {
-        const regexChain = new XMaskValidator({
+        return new XMaskValidator({
             type: 'dynamic',
             value: '',
-            error: error,
             check: ({symbol}) => {
                 const accept = value.test(symbol) ? 1 : -1
                 const errorMessage = accept === -1 ? error : null
@@ -54,11 +53,10 @@ class XMaskValidator {
             },
             error
         })
-        return regexChain
     }
 
     static static({value, error}) {
-        const staticChain = new XMaskValidator({
+        return new XMaskValidator({
             type: 'static',
             value: value,
             check: ({symbol}) => {
@@ -73,12 +71,11 @@ class XMaskValidator {
             },
             error
         })
-        return staticChain
     }
 
     static function({value, error}) {
         const handler = value
-        const functionChain = new XMaskValidator({
+        return new XMaskValidator({
             type: 'dynamic',
             value: '',
             check: ({symbol, index, xmask}) => {
@@ -87,11 +84,10 @@ class XMaskValidator {
             },
             write: ({symbol, index, xmask}) => {
                 //Второй аргумент для разделения на check и write
-                return  handler({symbol, index, xmask}, 'write')
+                return handler({symbol, index, xmask}, 'write')
             },
             error
         })
-        return functionChain
     }
 }
 

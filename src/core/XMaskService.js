@@ -1,6 +1,6 @@
-import XMaskInputWatcher from "@nadilk/x-input-mask/src/core/XMaskInputWatcher";
-import XMaskModel from "@nadilk/x-input-mask/src/core/XMaskModel";
-import defaultConfig from "@nadilk/x-input-mask/src/resources/defaultConfig";
+import XMaskInputWatcher from "./XMaskInputWatcher";
+import XMaskModel from "./XMaskModel";
+import defaultConfig from "../resources/defaultConfig";
 
 class XMaskService {
     constructor(config) {

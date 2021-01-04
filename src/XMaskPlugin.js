@@ -1,5 +1,6 @@
 import defaultConfig from "./resources/defaultConfig";
 import XMaskDirective from "./XMaskDirective";
+import XMaskService from "@nadilk/x-input-mask/src/core/XMaskService";
 
 function tryGetConfig(config,param){
     if(config && config[param])
@@ -17,10 +18,7 @@ function generateConfig(options) {
 
 const XMaskPlugin = {
     install(app, options) {
-        app.config.globalProperties.__xmask = {
-            config: generateConfig(options)
-        }
-
+        app.config.globalProperties.__xmask = new XMaskService(options)
         app.directive('xmask',XMaskDirective)
     }
 }

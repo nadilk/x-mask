@@ -1,7 +1,7 @@
 // Класс валидатора символов,
 // есть несколько предопределнных типов валидаторов, кторые можно легко создать
 class XMaskValidator {
-    constructor({type, value, check, write, error}) {
+    constructor({type, value, check, write, error}, config) {
         this.type = type
         this.value = value
         //Аргументы функции {symbol - сам символ,index -желаемая позиция символа,xmask - модель маски}
@@ -33,6 +33,7 @@ class XMaskValidator {
         // }
         this.write = write
         this.error = error
+        this.config = config || {}
     }
 
     static regex({value, error}) {
@@ -48,7 +49,7 @@ class XMaskValidator {
                 const accept = value.test(symbol) ? 1 : -1
                 const errorMessage = accept === -1 ? error : null
                 if (accept === 1)
-                    xmask.writeSymbolAt(symbol, index)
+                    xmask.setValueAt(symbol, index)
                 return {accept, error: errorMessage}
             },
             error
@@ -66,11 +67,11 @@ class XMaskValidator {
                 // то ни один из них не будет пробасываться вперед, потому что сливается со статичной маской
             },
             write: ({symbol, index, xmask}) => {
-                xmask.writeSymbolAt(value, index)
+                xmask.setValueAt(value, index)
                 return {accept: symbol !== value ? 0 : 1}
             },
             error
-        })
+        }, {defaultValue: value})
     }
 
     static function({value, error}) {
@@ -88,6 +89,38 @@ class XMaskValidator {
             },
             error
         })
+    }
+
+    static getValidatorsFor(mask,config){
+        let nextEscape = false
+        const validators = []
+
+        for (let i = 0; i < mask.length; i++) {
+            let nextSymbol = mask[i]
+            let validator = null
+            if (!nextEscape && nextSymbol === config.escapeCharacter) {
+                nextEscape = true
+                continue
+            }
+            if (nextEscape) {
+                validator = XMaskValidator.static({value: nextSymbol})
+                nextEscape = false
+            } else {
+                const findSymbol = config.symbols.find(s => s.alias === nextSymbol)
+                if (findSymbol) {
+                    if (findSymbol.type === 'regex') {
+                        validator = XMaskValidator.regex(findSymbol)
+                    } else if (findSymbol.type === 'function') {
+                        validator = XMaskValidator.function(findSymbol)
+                    }
+                } else {
+                    validator = XMaskValidator.static({value: nextSymbol})
+                }
+            }
+            validators.push(validator)
+        }
+
+        return validators
     }
 }
 

@@ -1,3 +1,9 @@
+/**
+ * @typedef {Object} InsertResult
+ * @property {number} insertPosition - The index of next insert
+ * @property {string[]} errors - The Y Coordinate
+ */
+
 import XMaskValidator from "./XMaskValidator";
 import defaultConfig from "../resources/defaultConfig";
 
@@ -5,159 +11,140 @@ import defaultConfig from "../resources/defaultConfig";
 // но с целью универсальности не имеет привязки к элементам ввода HTML, событиям, все хранится в объектах
 // Изменения производимые над оригинальным инпутом точно так же применяются здесь, а полученный результат отправляется обратно
 class XMaskModel {
+    /**
+     * Model representing current state of the masked value and processing text input
+     * @param mask {string} Mask string
+     * @param config {Object} Configuration object
+     * @param initialValue {string|null|undefined} Initial value to insert
+     */
     constructor(mask, config, initialValue) {
-        this.config = config||defaultConfig
-        this.setMask(mask)
-        if(initialValue)
-            this.pushText(initialValue,0)
+        this.config = config || defaultConfig
+        this.setMask(mask,true)
+        initialValue = initialValue || ''
+        this.applyMask(initialValue)
     }
 
-    setMask(mask){
-        this.value = {
-            string: mask,
-            array: this.generateMaskArray(mask)
+    getFilledSymbols(strParams) {
+        let {start, end, nullReplace, onlyDynamic} = strParams||{}
+        start = start || 0
+        end = Number.isInteger(end) ? end : this.mask.validators.length
+        nullReplace = nullReplace || ''
+        onlyDynamic = onlyDynamic || false
+        let str = ''
+        end = Math.min(this.mask.validators.length, end || this.mask.validators.length)
+        for (let i = start; i < end; i++) {
+            if (!onlyDynamic || this.mask.validators[i].type !== 'static')
+                str += (this.mask.validators[i].value || nullReplace)
+        }
+        return str
+    }
+
+    get currentValue() {
+        return this.getFilledSymbols({nullReplace: this.config.fillMask ? '_' : ''})
+    }
+
+    applyMask(inputText) {
+        inputText = inputText || this.getFilledSymbols()
+        this.insertText({position: 0, cut: -1, text: inputText})
+    }
+
+    /**
+     * Setting mask string
+     * @param mask {string} Mask string
+     */
+    setMask(mask, doNotApply) {
+        this.mask = {
+            applied: false,
+            stringValue: mask,
+            validators: XMaskValidator.getValidatorsFor(mask, this.config),
+        }
+        if (!doNotApply) {
+            this.applyMask()
         }
     }
 
-    generateMaskArray(mask){
-        let nextEscape = false
-        const maskArray = []
 
-        for(let i=0; i<mask.length;i++){
-            let nextSymbol = mask[i]
-            let maskChain = null
-            if(!nextEscape && nextSymbol === this.config.escapeCharacter){
-                nextEscape = true
-                continue
-            }
-            if(nextEscape){
-                maskChain = XMaskValidator.static({value:nextSymbol})
-                nextEscape = false
-            }else{
-                const findSymbol = this.config.symbols.find(s => s.alias === nextSymbol)
-                if(findSymbol){
-                    if(findSymbol.type === 'regex'){
-                        maskChain = XMaskValidator.regex(findSymbol)
-                    }else if(findSymbol.type === 'function'){
-                        maskChain = XMaskValidator.function(findSymbol)
-                    }
-                }else{
-                    maskChain = XMaskValidator.static({value:nextSymbol})
-                }
-            }
-            maskArray.push(maskChain)
+    /**
+     *
+     * @param position {number} Position of the insert
+     * @param cut {number} Length of cutted substring
+     * @param text {string} Text to insert
+     * @returns {InsertResult}
+     */
+    insertText(insertData) {
+        let {position, cut, text} = insertData||{}
+        this.maskApplied = false
+        position = position || 0
+        cut = Number.isInteger(cut) ? (cut === -1 ? this.mask.validators.length : cut) : 0
+
+        const textToInsert = text || ''
+        const textToAppend = this.getFilledSymbols({start: position + cut, onlyDynamic: true})
+
+        let insertResult = this.insertAndMask(position, text)
+        let appendResult = this.insertAndMask(insertResult.caret, textToAppend)
+        this.padInput(appendResult.caret)
+        this.maskApplied = true
+        return {
+            value: this.currentValue,
+            selectionStart: insertResult.caret,
+            selectionEnd: insertResult.caret,
+            errors: insertResult.errors
         }
-
-        return maskArray
     }
 
-    getString() {
-        if (this.config.fillMask)
-            return this.value.array.map(a => a.value || '_').join('')
-        else {
-            const lastUnfilledChain = this.checkIntervalFilled(0)
-            if (lastUnfilledChain >= 0)
-                return this.value.array.slice(0, lastUnfilledChain).map(a => a.value || '').join('')
-            else
-                return this.value.array.map(a => a.value || '').join('')
-        }
 
-    }
-
-    pushText(text, position) {
-        if (position >= this.value.array.length)
-            return {insertLength: 0}
-        let insertPosition = position
-        const errors = []
-        for (let i = 0; i < text.length; i++) {
-            const symbol = text[i]
-            let {accept,error} = this.pushSymbol(symbol, insertPosition)
-            if(error)
-                errors.push({symbol,insertPosition,error})
+    /**
+     * Cutting masked string to 'position', then appending 'text' and applying mask
+     * @param position {number} Index of text inserting
+     * @param text {string} Text to insert
+     * @returns {InsertResult}
+     */
+    insertAndMask(position, text) {
+        let caret = position
+        let textPosition = 0
+        let errors = []
+        while (text && text.length > textPosition && caret < this.mask.validators.length) {
+            const currentValidator = this.mask.validators[caret]
+            const {accept, error} = currentValidator.write({symbol: text[textPosition], index: caret, xmask: this})
             switch (accept) {
-                case -1://Не подошел символ
-                    //Тут просто ничего не трогаем, тогда в следующем цикле будет пимеряться следующий символ
-                    break
-                case 0://Подошел, но нужно передать на следующее место
-                    i--//Чтобы взялся опять старый символ
-                    insertPosition++//Переходим к следующей позиции вставки
+                case -1://Не подошел символ нужно попробовать следующий
+                    textPosition++
                     break
                 case 1://Подошел, символ забрали
-                    insertPosition++//Просто переходим к следующей позиции вставки
-            }
-        }
-        return {insertLength: insertPosition - position, errors}
-    }
-
-    deleteText(position, length) {
-        if (position >= this.value.array.length)
-            return
-        this.shiftDynamic(position, -length)
-
-        this.resetValues(position, position + length, true)
-        const lastUnfilledIndex = this.checkIntervalFilled(0)
-        if (lastUnfilledIndex >= 0)
-            this.resetValues(lastUnfilledIndex, this.value.array.length)
-    }
-
-    checkIntervalFilled(start, end) {
-        end = end || (this.value.array.length - 1)
-        let lastUnfilledIndex = -1
-        for (let i = end; i >= start; i--) {
-            if (this.value.array[i].type === 'dynamic') {
-                if (this.value.array[i].value)
+                    textPosition++//Переходим к следующей позиции вставки
+                    caret++
                     break
-                else
-                    lastUnfilledIndex = i
+                case 0://Подошел, но нужно передать на следующее место
+                    //Тут просто ничего не трогаем, тогда в следующем цикле будет пимеряться следующий символ
+                    caret++
+                    break
+            }
+            if (error)
+                errors.push(error)
+        }
+
+
+        return {
+            caret,
+            errors
+        }
+    }
+
+    padInput(start) {
+        for (let i = start; i < this.mask.validators.length; i++) {
+            const currentValidator = this.mask.validators[i]
+            //If Validator is static and fillMask option is true - show static symbols
+            if (this.config.fillMask && currentValidator.type === 'static') {
+                currentValidator.write({symbol: '', index: i, xmask: this})
+            } else {
+                currentValidator.value = null
             }
         }
-        return lastUnfilledIndex
-    }
-
-    pushSymbol(symbol, position) {
-        if (position >= this.value.array.length)
-            return {accept: -1}
-        const currentChain = this.value.array[position]
-        let {accept,error} = currentChain.check({symbol,index:position,xmask:this})
-        if (accept !== -1 && currentChain.type !== 'static') {
-            this.shiftDynamic(position, 1);
-        }
-        if(accept !== -1)
-            ({accept,error} = currentChain.write({symbol,index:position,xmask:this}))
-        return {accept,error}
     }
 
 
-    shiftDynamic(start, offset) {
-        if (start >= this.value.array.length)
-            return
-        let targetChains = this.value.array.filter((chain, index) => chain.type === 'dynamic' && index >= start)
-        if (offset > 0) {
-            targetChains = targetChains.reverse()
-            offset = -offset
-        }
-        targetChains.forEach((chain, index) => {
-            chain.value = targetChains[index - offset] ? targetChains[index - offset].value : null
-        })
-    }
-
-    resetValues(start, offset, onlyStatic) {
-        if (start >= this.value.array.length)
-            return
-        for (let i = start; i < start + offset; i++) {
-            if (this.value.array[i] && (!onlyStatic || this.value.array[i].type === 'static'))
-                if(this.value.array[i].type === 'static' && !this.config.fillMask)
-                this.value.array[i].value = null
-        }
-    }
-
-    updateValue(newValue){
-        this.deleteText(0,this.value.array.length)
-        this.pushText(newValue,0)
-    }
-
-    writeSymbolAt(symbol,index){
-        this.value.array[index].value = symbol
+    setValueAt(value, index) {
+        this.mask.validators[index].value = value
     }
 
 }

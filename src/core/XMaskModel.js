@@ -1,15 +1,15 @@
 /**
- * @typedef {Object} InsertResult
- * @property {number} insertPosition - The index of next insert
- * @property {string[]} errors - The Y Coordinate
+ * @typedef {{caret: number, errors: string[]}} XMaskModel~InsertResult
  */
 
-import XMaskValidator from "./XMaskValidator";
+/**
+ * @typedef {{cut: ?number, position: ?number, text: ?string}} XMaskModel~InsertData
+ */
+
+import XMaskCell from "./XMaskCell";
 import defaultConfig from "../resources/defaultConfig";
 
-// Класс который реализует функционал хранения текущего состояния поля ввода и маски,
-// но с целью универсальности не имеет привязки к элементам ввода HTML, событиям, все хранится в объектах
-// Изменения производимые над оригинальным инпутом точно так же применяются здесь, а полученный результат отправляется обратно
+
 class XMaskModel {
     /**
      * Model representing current state of the masked value and processing text input
@@ -17,46 +17,62 @@ class XMaskModel {
      * @param config {Object} Configuration object
      * @param initialValue {string|null|undefined} Initial value to insert
      */
-    constructor(mask, config, initialValue) {
+    constructor(mask, config, xmask) {
         this.config = config || defaultConfig
-        this.setMask(mask,true)
-        initialValue = initialValue || ''
-        this.applyMask(initialValue)
+        this.setMask(mask, true)
+        this.xmask = xmask
     }
 
+    /**
+     * Collect and filter symbols from the XMaskCells range
+     * @param {number} [strParams.start=0]
+     * @param {number} [strParams.end=this.mask.validators.length]
+     * @param {string} [strParams.nullReplace='']
+     * @param {boolean} [strParams.onlyDynamic=false]
+     * @return {string}
+     */
     getFilledSymbols(strParams) {
-        let {start, end, nullReplace, onlyDynamic} = strParams||{}
+        let {start, end, nullReplace, onlyDynamic} = strParams || {}
         start = start || 0
-        end = Number.isInteger(end) ? end : this.mask.validators.length
+        end = Number.isInteger(end) ? end : this.mask.cells.length
         nullReplace = nullReplace || ''
         onlyDynamic = onlyDynamic || false
         let str = ''
-        end = Math.min(this.mask.validators.length, end || this.mask.validators.length)
+        end = Math.min(this.mask.cells.length, end || this.mask.cells.length)
         for (let i = start; i < end; i++) {
-            if (!onlyDynamic || this.mask.validators[i].type !== 'static')
-                str += (this.mask.validators[i].value || nullReplace)
+            if (!onlyDynamic || this.mask.cells[i].type !== 'static')
+                str += (this.mask.cells[i].value || nullReplace)
         }
         return str
     }
 
+    /**
+     * Text value of the cells to sync with input
+     * @return {string}
+     */
     get currentValue() {
-        return this.getFilledSymbols({nullReplace: this.config.fillMask ? '_' : ''})
+        return this.getFilledSymbols({nullReplace: this.config.enablePlaceholders ? '_' : ''})
     }
 
-    applyMask(inputText) {
-        inputText = inputText || this.getFilledSymbols()
-        this.insertText({position: 0, cut: -1, text: inputText})
+    /**
+     * Apply mask to existing textValue or to new one
+     * @param {string} [replaceText=this.getFilledSymbols()]
+     */
+    applyMask(replaceText) {
+        replaceText = replaceText || this.getFilledSymbols()
+        this.insertText({position: 0, cut: -1, text: replaceText})
     }
 
     /**
      * Setting mask string
-     * @param mask {string} Mask string
+     * @param {string} mask Mask string
+     * @param {boolean=} doNotApply Optionally do not apply mask after changing mask
      */
     setMask(mask, doNotApply) {
         this.mask = {
             applied: false,
             stringValue: mask,
-            validators: XMaskValidator.getValidatorsFor(mask, this.config),
+            cells: XMaskCell.getCellsFor(mask, this.config),
         }
         if (!doNotApply) {
             this.applyMask()
@@ -65,25 +81,22 @@ class XMaskModel {
 
 
     /**
-     *
-     * @param position {number} Position of the insert
-     * @param cut {number} Length of cutted substring
-     * @param text {string} Text to insert
-     * @returns {InsertResult}
+     * Input / delete / cut / replace text
+     * @param {XMaskModel.InsertData} insertData
+     * @returns {{selectionStart: number, selectionEnd: number, value: string, errors: *}}
      */
     insertText(insertData) {
-        let {position, cut, text} = insertData||{}
-        this.maskApplied = false
+        let {position, cut, text} = insertData || {}
         position = position || 0
-        cut = Number.isInteger(cut) ? (cut === -1 ? this.mask.validators.length : cut) : 0
+        cut = Number.isInteger(cut) ? (cut === -1 ? this.mask.cells.length : cut) : 0
+        text = text || ''
 
-        const textToInsert = text || ''
         const textToAppend = this.getFilledSymbols({start: position + cut, onlyDynamic: true})
 
         let insertResult = this.insertAndMask(position, text)
         let appendResult = this.insertAndMask(insertResult.caret, textToAppend)
         this.padInput(appendResult.caret)
-        this.maskApplied = true
+
         return {
             value: this.currentValue,
             selectionStart: insertResult.caret,
@@ -94,18 +107,23 @@ class XMaskModel {
 
 
     /**
-     * Cutting masked string to 'position', then appending 'text' and applying mask
+     * Inserting text in the mask cells starting from position
      * @param position {number} Index of text inserting
      * @param text {string} Text to insert
-     * @returns {InsertResult}
+     * @returns {typeof XMaskModel.InsertResult}
      */
     insertAndMask(position, text) {
         let caret = position
         let textPosition = 0
         let errors = []
-        while (text && text.length > textPosition && caret < this.mask.validators.length) {
-            const currentValidator = this.mask.validators[caret]
-            const {accept, error} = currentValidator.write({symbol: text[textPosition], index: caret, xmask: this})
+        while (text && text.length > textPosition && caret < this.mask.cells.length) {
+            const currentCell = this.mask.cells[caret]
+            const {accept, error} = currentCell.write({
+                symbol: text[textPosition],
+                index: caret,
+                xmask: this.xmask,
+                cell: currentCell
+            })
             switch (accept) {
                 case -1://Не подошел символ нужно попробовать следующий
                     textPosition++
@@ -130,21 +148,30 @@ class XMaskModel {
         }
     }
 
+    /**
+     * Clear or fill with placeholders unfilled mask cells (depending on this.config.enablePlaceholders value)
+     * @param {number} start Index to start padding
+     */
     padInput(start) {
-        for (let i = start; i < this.mask.validators.length; i++) {
-            const currentValidator = this.mask.validators[i]
-            //If Validator is static and fillMask option is true - show static symbols
-            if (this.config.fillMask && currentValidator.type === 'static') {
-                currentValidator.write({symbol: '', index: i, xmask: this})
+        for (let i = start; i < this.mask.cells.length; i++) {
+            const currentCell = this.mask.cells[i]
+            //If Validator is static and enablePlaceholders option is true - show static symbols
+            if (this.config.enablePlaceholders && currentCell.type === 'static') {
+                currentCell.write({symbol: '', index: i, cell: currentCell, xmask: this.xmask})
             } else {
-                currentValidator.value = null
+                currentCell.value = null
             }
         }
     }
 
 
+    /**
+     * Manually set the value of the mask cell without validation
+     * @param {string} value
+     * @param {number} index
+     */
     setValueAt(value, index) {
-        this.mask.validators[index].value = value
+        this.mask.cells[index].value = value
     }
 
 }

@@ -21,8 +21,9 @@ class XMaskService {
         this.inputEl = findInputDeep(this.rootEl)
         this.isComponent = this.rootEl.__vnode.type !== 'input' && this.rootEl.__vnode.type !== 'textarea'
         this.config = {...XMaskService.config, ...config}
-        this.model = new XMaskModel(mask, this.config, this.inputEl.value)
+        this.model = new XMaskModel(mask, this.config, this)
         this.domManager = new XMaskDomManager(this.inputEl, this.handleEvent.bind(this))
+        this.model.applyMask(this.inputEl.value)
     }
 
     handleEvent(type, data, callback) {
@@ -56,20 +57,20 @@ class XMaskService {
         return xmask
     }
 
-    setText(text){
+    setText(text) {
         this.domManager.setText(text)
     }
 
-    setMask(mask){
+    setMask(mask) {
         this.model.setMask(mask)
     }
 
-    setConfig(config){
+    setConfig(config) {
         this.model.config = config
         this.model.setMask(this.model.mask.stringValue)
     }
 
-    getText(){
+    getText() {
         return this.model.currentValue
     }
 }

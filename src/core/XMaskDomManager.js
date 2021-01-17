@@ -51,7 +51,7 @@ class XMaskDomManager {
         })
     }
 
-    triggerInput() {
+    triggerInput(ignoreErrors) {
         if (this.inputState.eventInputType.includes('delete')
             && this.inputState.selectionStart === this.inputState.selectionEnd) {
             if (this.inputState.eventInputType.includes('Backward')) {
@@ -64,7 +64,11 @@ class XMaskDomManager {
             position: this.inputState.selectionStart,
             text: this.inputState.eventData,
             cut: this.inputState.selectionEnd - this.inputState.selectionStart
-        }, this.setInputState.bind(this))
+        }, (insertResult) => {
+            if(ignoreErrors)
+                insertResult.errors = null;
+            this.setInputState(insertResult)
+        })
 
         this.inputState.eventData = null
         this.inputState.eventInputType = null
@@ -123,7 +127,7 @@ class XMaskDomManager {
         this.inputState.eventInputType = 'insert'
         this.inputState.selectionStart = 0
         this.inputState.selectionEnd = -1
-        this.triggerInput()
+        this.triggerInput(true)
     }
 }
 

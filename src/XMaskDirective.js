@@ -7,8 +7,8 @@ function getMask(binding) {
 
 function getConfig(binding) {
     const baseConfig = binding.value ? binding.value.config : null
-    const fillMask = binding.arg === 'fill'
-    return {...baseConfig, fillMask}
+    const enablePlaceholders = binding.arg === 'fill'
+    return {...baseConfig, enablePlaceholders}
 }
 
 
@@ -16,7 +16,9 @@ const XMaskDirective = {
     mounted(el, binding) {
         const mask = getMask(binding)
         binding.instance.__xmask.attachToInput(el, mask, getConfig(binding))
-        el._xmask_.setText(el._xmask_.inputEl.value)
+        binding.instance.$nextTick(()=>{
+            el._xmask_.setText(el._xmask_.inputEl.value)
+        })
     },
     updated(el, binding) {
         const mask = getMask(binding)
